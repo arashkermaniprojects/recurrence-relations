@@ -1657,7 +1657,7 @@ function renderTryThis(){
 function renderComplexityChart(){
   const container=$('complexityChartContainer');
   if(!container) return;
-  const w=600,h=180,pad={l:50,r:20,t:10,b:30};
+  const w=600,h=200,pad={l:50,r:20,t:10,b:50};
   const pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
 
   // Plot log(n), n, n*log(n) for n=1..50 with log scale on Y
@@ -1688,7 +1688,7 @@ function renderComplexityChart(){
   }
   // X axis labels
   for(let n=10;n<=50;n+=10){
-    svg+=`<text x="${scaleX(n)}" y="${h-4}" text-anchor="middle" fill="#666" font-size="9">n=${n}</text>`;
+    svg+=`<text x="${scaleX(n)}" y="${pad.t+ph+14}" text-anchor="middle" fill="#666" font-size="9">n=${n}</text>`;
   }
 
   // Plot each function
@@ -1703,9 +1703,10 @@ function renderComplexityChart(){
   // 2^n goes off chart label
   svg+=`<text x="${scaleX(22)}" y="${pad.t+12}" fill="#ff5c7a" font-size="9" font-weight="600">2\u207F \u2192 off the chart!</text>`;
 
-  // Legend
-  const ly=h-4;
-  let lx=pad.l+10;
+  // Legend — positioned below x-axis ticks
+  const ly=h-8;
+  const totalLegendW=funcs.reduce((s,f)=>s+f.name.length*6+38,0);
+  let lx=(w-totalLegendW)/2;
   funcs.forEach(f=>{
     svg+=`<line x1="${lx}" y1="${ly-3}" x2="${lx+14}" y2="${ly-3}" stroke="${f.color}" stroke-width="2"/>`;
     svg+=`<text x="${lx+18}" y="${ly}" fill="${f.color}" font-size="9">${f.name}</text>`;
