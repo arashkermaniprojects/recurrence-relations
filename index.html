@@ -797,9 +797,9 @@ const PRESETS = {
   hanoi: {
     name:'Tower of Hanoi', a:2, b:1, k:0, mode:'hanoi',
     complexity:'O(2\u207F)', compClass:'exp',
-    desc:'Move n disks from peg A to peg C using peg B as auxiliary. Rule: only move one disk at a time, never place a larger disk on a smaller one. To move n disks, first move n-1 to the auxiliary, move the largest, then move n-1 back.',
-    why:'To move n disks you must make 2 recursive calls on n-1 disks plus 1 move. T(n) = 2T(n-1) + 1 solves to T(n) = 2\u207F - 1. Even for n=20, that\'s over a million moves!',
-    levelDesc:'Level i: 2\u2071 subproblems, each moving n-i disks. Each does 1 move of the bottom disk, but the recursive calls double at every level.',
+    desc:'Move n disks from peg A to peg C using peg B as auxiliary. Rules: (1) move only one disk at a time, (2) never place a larger disk on a smaller one.<pre style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px 10px;margin:8px 0 4px;font-size:11px;line-height:1.5;color:#e8ecff;font-family:monospace;white-space:pre;overflow-x:auto;">Hanoi(n, src, dst, aux):\n  if n == 1:\n    move disk 1: src \u2192 dst    \u2190 1 move\n  else:\n    Hanoi(n-1, src, aux, dst) \u2190 T(n-1)\n    move disk n: src \u2192 dst    \u2190 1 move\n    Hanoi(n-1, aux, dst, src) \u2190 T(n-1)</pre>',
+    why:'The algorithm makes <b>2 recursive calls</b> each on <b>n\u22121</b> disks, plus <b>1 move</b> of the largest disk. This gives:<br>T(n) = T(n\u22121) + 1 + T(n\u22121) = <b>2T(n\u22121) + 1</b>.<br>Solving: T(n) = 2\u207F \u2212 1. Even for n=20, that\'s over a million moves!',
+    levelDesc:'Level i: 2\u2071 recursive calls, each handling n\u2212i disks. Each call does 1 move of its bottom disk. Total moves at level i = 2\u2071, summing to 2\u207F\u22121.',
     svg: function(){
       const w=380,h=100;
       let s=`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
