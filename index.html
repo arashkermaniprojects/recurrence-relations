@@ -496,9 +496,9 @@
       <div class="controls">
         <label>Recurrence: T(n) = a · T(n/b) + O(n^k)</label>
         <div class="row3 mb10">
-          <div><label>a</label><input type="number" id="masterA" value="2" min="1" max="10" /></div>
-          <div><label>b</label><input type="number" id="masterB" value="2" min="2" max="10" /></div>
-          <div><label>k</label><input type="number" id="masterK" value="1" min="0" max="4" step="0.5" /></div>
+          <div><label>a <span style="font-size:10px;font-weight:400;">(subproblems)</span></label><input type="number" id="masterA" value="2" min="1" max="10" /></div>
+          <div><label>b <span style="font-size:10px;font-weight:400;">(divisor)</span></label><input type="number" id="masterB" value="2" min="2" max="10" /></div>
+          <div><label>k <span style="font-size:10px;font-weight:400;">(work exp.)</span></label><input type="number" id="masterK" value="1" min="0" max="4" step="0.5" /></div>
         </div>
         <button id="btnAnalyze">Analyze</button>
         <div class="stat">
@@ -516,6 +516,7 @@
             <button class="secondary masterEx" data-a="2" data-b="2" data-k="2">Case 3</button>
           </div>
         </div>
+        <div id="masterTreeContainer" class="mt10"></div>
       </div>
     </div>
 
@@ -1339,24 +1340,119 @@ function renderMaster(){
   $('masterResult').textContent=result;
 
   const maxVal=Math.max(logba,k,0.1);
-  const leftPct=(logba/(maxVal*1.3))*100;
-  const rightPct=(k/(maxVal*1.3))*100;
+  let leftPct=(logba/(maxVal*1.3))*100;
+  let rightPct=(k/(maxVal*1.3))*100;
+  // Fix visual bars when both values are zero (e.g. Binary Search a=1,b=2,k=0)
+  if(logba===0 && k===0){ leftPct=50; rightPct=50; }
+  else { if(leftPct>0 && leftPct<10) leftPct=10; if(rightPct>0 && rightPct<10) rightPct=10; }
   const compSymbol=logba>k+eps?'>':(Math.abs(logba-k)<=eps?'=':'<');
   const compColor=activeCase===1?'var(--c1)':(activeCase===2?'var(--c2)':'var(--c3)');
 
-  // Build explanation for the comparison
-  const compExplain = activeCase===1
-    ? `The <b style="color:var(--c1);">recursion rate</b> (how fast subproblems multiply) beats the <b style="color:var(--c3);">work per level</b>. The leaves dominate.`
+  // --- Parameter conceptual explanations ---
+  const aExplain = a===1
+    ? `Only <b>1</b> recursive call \u2014 the algorithm picks one sub-problem and ignores the rest (e.g., binary search picks one half).`
+    : a===2
+    ? `The algorithm makes <b>2</b> recursive sub-calls \u2014 it splits the problem into two pieces and solves both (e.g., merge sort sorts both halves).`
+    : `The algorithm spawns <b>${a}</b> recursive sub-calls. Each call tackles a smaller piece of the problem independently.`;
+  const bFraction = b===2 ? 'half' : b===3 ? 'one-third' : b===4 ? 'one-quarter' : `1/${b}`;
+  const bExplain = `Each sub-call works on a problem that is <b>${bFraction}</b> the original size (n/${b}). ${b===2 ? 'The problem halves at each level of recursion.' : `The problem shrinks by a factor of ${b} at each level.`}`;
+  const kExplain = k===0
+    ? `Each call does <b>O(1)</b> constant work outside the recursion (e.g., one comparison or one swap). The non-recursive overhead is negligible.`
+    : k===1
+    ? `Each call does <b>O(n)</b> work proportional to its input size (e.g., merging two halves, scanning an array, or partitioning elements).`
+    : k===0.5
+    ? `Each call does <b>O(\u221An)</b> work \u2014 proportional to the square root of its input size.`
+    : `Each call does <b>O(n${sup(k)})</b> work \u2014 polynomial in its input size.`;
+
+  // --- Level-by-level cost breakdown ---
+  const exN = 4;
+  const nEx = Math.round(Math.pow(b, exN));
+  let levelRows = '';
+  const maxLvl = Math.min(exN + 1, 5);
+  for(let i = 0; i < maxLvl; i++){
+    const nodes = Math.pow(a, i);
+    const subSz = nEx / Math.pow(b, i);
+    const wpn = Math.pow(subSz, k);
+    const tot = nodes * wpn;
+    const nodesStr = i===0 ? '1' : a===1 ? '1' : (i===1 ? `${a}` : `${a}${sup(i)} = ${Math.round(nodes)}`);
+    const sizeStr = i===0 ? `${nEx}` : `${nEx}/${b}${i>1?sup(i):''} = ${Math.round(subSz)}`;
+    const wpnStr = k===0 ? '1' : (wpn<0.01?wpn.toExponential(1):Math.round(wpn).toString());
+    const totStr = tot<0.01?tot.toExponential(1):Math.round(tot).toString();
+    const isFirst = i===0, isLast = i===maxLvl-1;
+    let rs = '';
+    if(activeCase===1 && isLast) rs='background:rgba(106,169,255,0.08);font-weight:600;';
+    else if(activeCase===3 && isFirst) rs='background:rgba(255,209,102,0.08);font-weight:600;';
+    levelRows += `<tr style="${rs}"><td>${i}</td><td>${nodesStr}</td><td>${sizeStr}</td><td>${wpnStr}</td><td>${totStr}</td></tr>`;
+  }
+  const trendArrow = activeCase===1 ? '\u2191' : activeCase===2 ? '\u2192' : '\u2193';
+  const trend = activeCase===1
+    ? `<span style="color:var(--c1);">${trendArrow} Total work per level <b>increases</b> going deeper</span> \u2014 the bottom (leaf) level does the most work. The total cost is dominated by the number of leaves: <b>n<sup>log<sub>${b}</sub>(${a})</sup></b>.`
     : activeCase===2
-    ? `The <b style="color:var(--c1);">recursion rate</b> exactly matches the <b style="color:var(--c3);">work per level</b>. Every level contributes equally.`
-    : `The <b style="color:var(--c3);">work per level</b> beats the <b style="color:var(--c1);">recursion rate</b>. The root dominates.`;
+    ? `<span style="color:var(--c2);">${trendArrow} Total work per level stays <b>constant</b></span> \u2014 every level contributes the same amount. Since there are log<sub>${b}</sub>(n) levels, we pick up an extra <b>log n</b> factor.`
+    : `<span style="color:var(--c3);">${trendArrow} Total work per level <b>decreases</b> going deeper</span> \u2014 the root (top level) does the most work. The total cost is dominated by the root: <b>O(n<sup>${k}</sup>)</b>.`;
+
+  // --- Dynamic recursion story ---
+  let level1Total;
+  if(k===0) level1Total = `${a}`;
+  else if(k===1){
+    if(a===1) level1Total = `n/${b}`;
+    else if(a===b) level1Total = 'n';
+    else {
+      const r = a/b;
+      level1Total = Number.isInteger(r) ? `${r}n` : `${a}n/${b}`;
+    }
+  } else level1Total = `${a}\u00B7(n/${b})${sup(k)}`;
+
+  const fnStr = k===0?'1':k===1?'n':`n${sup(k)}`;
+  let leafStr;
+  if(logbaR===0) leafStr='1';
+  else if(Math.abs(logbaR-1)<0.01) leafStr='n';
+  else if(Math.abs(logbaR-2)<0.01) leafStr='n\xB2';
+  else leafStr=`n<sup>${logbaR.toFixed(2)}</sup>`;
+
+  const compExplain = activeCase===1
+    ? `The <b style="color:var(--c1);">recursion rate</b> (how fast subproblems multiply) beats the <b style="color:var(--c3);">work shrinkage</b>. More subproblems are created than work reduces per subproblem \u2014 the <b>leaves dominate</b>.`
+    : activeCase===2
+    ? `The <b style="color:var(--c1);">recursion rate</b> exactly matches the <b style="color:var(--c3);">work shrinkage</b>. The growth in subproblems perfectly cancels the reduction in work per subproblem \u2014 <b>every level contributes equally</b>.`
+    : `The <b style="color:var(--c3);">work per subproblem</b> shrinks slower than subproblems multiply. The root does the most work and deeper levels contribute less \u2014 the <b>root dominates</b>.`;
 
   $('masterViz').innerHTML=`
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5;">
-      <b>The key question:</b> How does the <span style="color:var(--c1);">number of subproblems</span> (measured by log<sub>b</sub>(a)) compare to the <span style="color:var(--c3);">work done at each level</span> (measured by k in n<sup>k</sup>)?
+    <!-- Parameter Explanations -->
+    <div style="margin-bottom:16px;padding:16px;border-radius:14px;background:rgba(106,169,255,0.04);border:1px solid rgba(106,169,255,0.12);">
+      <div style="font-size:13px;font-weight:700;color:var(--c1);margin-bottom:10px;">Understanding the Parameters</div>
+      <div style="font-size:12.5px;line-height:1.7;color:var(--text);">
+        <div style="margin-bottom:8px;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,0.15);border-left:3px solid var(--c1);">
+          <b style="color:var(--c1);">a = ${a}</b> <span style="color:var(--muted);font-size:11px;">(number of recursive sub-calls)</span><br>
+          ${aExplain}
+        </div>
+        <div style="margin-bottom:8px;padding:8px 12px;border-radius:10px;background:rgba(0,0,0,0.15);border-left:3px solid var(--c6);">
+          <b style="color:var(--c6);">b = ${b}</b> <span style="color:var(--muted);font-size:11px;">(subproblem size divisor)</span><br>
+          ${bExplain}
+        </div>
+        <div style="padding:8px 12px;border-radius:10px;background:rgba(0,0,0,0.15);border-left:3px solid var(--c3);">
+          <b style="color:var(--c3);">k = ${k}</b> <span style="color:var(--muted);font-size:11px;">(work exponent per call)</span><br>
+          ${kExplain}
+        </div>
+      </div>
+    </div>
+
+    <!-- Dynamic Recursion Story -->
+    <div style="margin-bottom:16px;padding:16px;border-radius:14px;background:rgba(255,209,102,0.04);border:1px solid rgba(255,209,102,0.12);">
+      <div style="font-size:13px;font-weight:700;color:var(--c3);margin-bottom:10px;">How the Recursion Unfolds</div>
+      <div style="font-size:12.5px;line-height:1.85;color:var(--text);">
+        <div style="margin-bottom:6px;"><span style="color:var(--c3);">\u25B6</span> At <b>level 0</b> (the root), we have the full problem of size <b>n</b>. The root does <b>O(${k===0?'1':k===1?'n':'n'+sup(k)})</b> non-recursive work and spawns <b>${a}</b> recursive sub-call${a>1?'s':''}.</div>
+        <div style="margin-bottom:6px;"><span style="color:var(--c3);">\u25B6</span> At <b>level 1</b>, there ${a===1?'is':'are'} <b>${a}</b> subproblem${a>1?'s':''}, each of size <b>n/${b}</b>. Each does <b>O(${k===0?'1':k===1?'n/'+b:'(n/'+b+')'+sup(k)})</b> work. Total work at this level: <b>${level1Total}</b>.</div>
+        <div style="margin-bottom:6px;"><span style="color:var(--c3);">\u25B6</span> This continues for <b>log<sub>${b}</sub>(n)</b> levels until the subproblem size reaches 1.</div>
+        <div><span style="color:var(--c3);">\u25B6</span> At the <b>bottom</b> (level log<sub>${b}</sub>(n)), there ${logbaR===0?'is':'are'} <b>${a}<sup>log<sub>${b}</sub>(n)</sup> = ${leafStr}</b> leaf node${logbaR===0?'':'s'}, each doing O(1) work.</div>
+      </div>
+    </div>
+
+    <!-- The Key Question -->
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.6;">
+      <b>The key question:</b> How does the <span style="color:var(--c1);">rate at which subproblems multiply</span> (measured by log<sub>${b}</sub>(${a}) = <b>${logbaR.toFixed(2)}</b>) compare to the <span style="color:var(--c3);">rate at which work shrinks per subproblem</span> (measured by k = <b>${k}</b>)?
     </div>
     <div class="comparison-bar" style="flex-wrap:wrap;">
-      <div style="text-align:center;flex:0 0 auto;min-width:70px;">
+      <div style="text-align:center;flex:0 0 auto;min-width:80px;">
         <div style="font-size:10px;color:var(--muted);">recursion rate</div>
         <div style="font-size:10px;color:var(--c1);">log<sub>${b}</sub>(${a})</div>
         <div class="val" style="color:var(--c1);">${logbaR.toFixed(2)}</div>
@@ -1364,29 +1460,61 @@ function renderMaster(){
       <div class="bar-fill"><div class="bar-fill-inner" style="width:${leftPct}%;background:var(--c1);"></div></div>
       <div class="vs" style="color:${compColor};font-size:22px;font-weight:700;">${compSymbol}</div>
       <div class="bar-fill"><div class="bar-fill-inner" style="width:${rightPct}%;background:var(--c3);"></div></div>
-      <div style="text-align:center;flex:0 0 auto;min-width:70px;">
+      <div style="text-align:center;flex:0 0 auto;min-width:80px;">
         <div style="font-size:10px;color:var(--muted);">work exponent</div>
         <div style="font-size:10px;color:var(--c3);">k</div>
         <div class="val" style="color:var(--c3);">${k.toFixed(2)}</div>
       </div>
     </div>
-    <div style="font-size:12px;line-height:1.5;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);">
+    <div style="font-size:12.5px;line-height:1.6;margin-bottom:16px;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.06);">
       ${compExplain}
     </div>
 
+    <!-- Level-by-Level Cost Breakdown -->
+    <div style="margin-bottom:16px;padding:16px;border-radius:14px;background:rgba(100,240,200,0.04);border:1px solid rgba(100,240,200,0.12);">
+      <div style="font-size:13px;font-weight:700;color:var(--c2);margin-bottom:8px;">Level-by-Level Cost Breakdown <span style="font-weight:400;color:var(--muted);font-size:11px;">(illustrated with n = ${nEx})</span></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px;">Each row shows how many nodes exist at that level, the subproblem size each node handles, and the total work done at that level.</div>
+      <table class="examples-table" style="margin-top:8px;">
+        <thead><tr><th>Level</th><th># Nodes</th><th>Subproblem Size</th><th>Work / Node</th><th>Level Total</th></tr></thead>
+        <tbody>${levelRows}</tbody>
+      </table>
+      <div style="font-size:12.5px;line-height:1.6;margin-top:10px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,0.12);color:var(--text);">${trend}</div>
+    </div>
+
+    <!-- Three Cases -->
     <div class="case-card ${activeCase===1?'active-case':''}">
       <h3>Case 1: log<sub>b</sub>(a) > k</h3>
-      <div class="formula">f(n) = O(n<sup>log<sub>b</sub>(a) \u2212 \u03B5</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup>)</div>
+      <div class="formula">f(n) = O(n<sup>log<sub>b</sub>(a) \u2212 \u03B5</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup>)</div>${activeCase===1 ? `
+      <div style="margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(106,169,255,0.08);border:1px solid rgba(106,169,255,0.2);font-size:13px;line-height:1.7;">
+        <div style="color:#8890b5;font-size:11px;margin-bottom:4px;">Substituting a=${a}, b=${b}, k=${k}:</div>
+        <div>log<sub>${b}</sub>(${a}) = <b>${logbaR.toFixed(2)}</b> &gt; k = ${k}</div>
+        <div>f(n) = n<sup>${k}</sup> = \u0398(${fnStr}) &nbsp;\u2014&nbsp; grows slower than n<sup>${logbaR.toFixed(2)}</sup></div>
+        <div style="margin-top:6px;font-size:15px;font-weight:700;color:#6aa9ff;">\u21D2 ${result}</div>
+      </div>` : ''}
       <div class="explanation">The recursion dominates. Work <b>grows</b> as we go deeper \u2014 the leaves do most of the work. Think: many subproblems, little work each.</div>
     </div>
     <div class="case-card ${activeCase===2?'active-case':''}">
       <h3>Case 2: log<sub>b</sub>(a) = k</h3>
-      <div class="formula">f(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup> log n)</div>
-      <div class="explanation">Balanced \u2014 each level contributes equally. Since there are log(n) levels, we pick up an extra log n factor. Example: Merge Sort.</div>
+      <div class="formula">f(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(n<sup>log<sub>b</sub>(a)</sup> log n)</div>${activeCase===2 ? `
+      <div style="margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(100,240,200,0.08);border:1px solid rgba(100,240,200,0.2);font-size:13px;line-height:1.7;">
+        <div style="color:#8890b5;font-size:11px;margin-bottom:4px;">Substituting a=${a}, b=${b}, k=${k}:</div>
+        <div>log<sub>${b}</sub>(${a}) = <b>${logbaR.toFixed(2)}</b> = k = ${k} &nbsp;\u2714</div>
+        <div>f(n) = n<sup>${k}</sup> = \u0398(${fnStr}) &nbsp;\u2014&nbsp; matches n<sup>log<sub>${b}</sub>(${a})</sup> = ${leafStr}</div>
+        <div>Each of the log<sub>${b}</sub>(n) levels contributes \u0398(${fnStr}) work</div>
+        <div style="margin-top:6px;font-size:15px;font-weight:700;color:#64f0c8;">\u21D2 ${result}</div>
+      </div>` : ''}
+      <div class="explanation">Balanced \u2014 each level contributes equally. Since there are log(n) levels, we pick up an extra log n factor.</div>
     </div>
     <div class="case-card ${activeCase===3?'active-case':''}">
       <h3>Case 3: log<sub>b</sub>(a) < k</h3>
-      <div class="formula">f(n) = \u03A9(n<sup>log<sub>b</sub>(a) + \u03B5</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(f(n))</div>
+      <div class="formula">f(n) = \u03A9(n<sup>log<sub>b</sub>(a) + \u03B5</sup>) &nbsp;\u2192&nbsp; T(n) = \u0398(f(n))</div>${activeCase===3 ? `
+      <div style="margin-top:8px;padding:10px 14px;border-radius:10px;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.2);font-size:13px;line-height:1.7;">
+        <div style="color:#8890b5;font-size:11px;margin-bottom:4px;">Substituting a=${a}, b=${b}, k=${k}:</div>
+        <div>log<sub>${b}</sub>(${a}) = <b>${logbaR.toFixed(2)}</b> &lt; k = ${k}</div>
+        <div>f(n) = n<sup>${k}</sup> = \u0398(${fnStr}) &nbsp;\u2014&nbsp; grows faster than n<sup>${logbaR.toFixed(2)}</sup> = ${leafStr}</div>
+        <div>Root dominates: total work \u2248 f(n) = \u0398(${fnStr})</div>
+        <div style="margin-top:6px;font-size:15px;font-weight:700;color:#ffd166;">\u21D2 ${result}</div>
+      </div>` : ''}
       <div class="explanation">The combine/divide work dominates. The root does the most work and it <b>shrinks</b> going down. The total is just the root's cost: f(n).</div>
     </div>
 
@@ -1406,6 +1534,7 @@ function renderMaster(){
         <tbody>
           <tr><td>Binary Search</td><td>T(n)=T(n/2)+O(1)</td><td><span class="case-tag c2">Case 2</span></td><td>\u0398(log n)</td></tr>
           <tr><td>Merge Sort</td><td>T(n)=2T(n/2)+O(n)</td><td><span class="case-tag c2">Case 2</span></td><td>\u0398(n log n)</td></tr>
+          <tr><td>Strassen's</td><td>T(n)=7T(n/2)+O(n\xB2)</td><td><span class="case-tag c1">Case 1</span></td><td>\u0398(n<sup>2.81</sup>)</td></tr>
           <tr><td>T(n)=4T(n/2)+n</td><td>a=4,b=2,k=1</td><td><span class="case-tag c1">Case 1</span></td><td>\u0398(n\xB2)</td></tr>
           <tr><td>T(n)=2T(n/2)+n\xB2</td><td>a=2,b=2,k=2</td><td><span class="case-tag c3">Case 3</span></td><td>\u0398(n\xB2)</td></tr>
           <tr style="border-top:1px solid rgba(255,92,122,0.15);">
@@ -1415,6 +1544,7 @@ function renderMaster(){
         </tbody>
       </table>
     </div>`;
+  renderMasterTree();
 }
 
 $('btnAnalyze').addEventListener('click',renderMaster);
@@ -1425,6 +1555,96 @@ document.querySelectorAll('.masterEx').forEach(btn=>{
     renderMaster();
   });
 });
+
+// ─── Master Theorem: Mini Recursion Tree ──────────────────
+function renderMasterTree(){
+  const a=parseFloat($('masterA').value)||2;
+  const b=parseFloat($('masterB').value)||2;
+  const k=parseFloat($('masterK').value)||0;
+  const el=$('masterTreeContainer');
+  if(!el) return;
+
+  const logba=Math.log(a)/Math.log(b);
+  const eps=0.001;
+  const caseNum=logba-k>eps?1:(Math.abs(logba-k)<=eps?2:3);
+  const caseColor=caseNum===1?'#6aa9ff':caseNum===2?'#64f0c8':'#ffd166';
+  const levels=3;
+
+  let h='<div style="padding:12px;border-radius:12px;background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.08);">';
+  h+='<div style="text-align:center;font-size:9px;font-weight:600;color:#8890b5;margin-bottom:10px;letter-spacing:0.5px;">RECURSION TREE STRUCTURE</div>';
+
+  for(let lv=0;lv<levels;lv++){
+    const totalNodes=Math.pow(a,lv);
+    const bPow=Math.pow(b,lv);
+    const show=Math.min(totalNodes,6);
+    const truncated=totalNodes>6;
+
+    let sizeLabel;
+    if(lv===0) sizeLabel='T(n)';
+    else if(lv===1) sizeLabel='T(n/'+b+')';
+    else sizeLabel='T(n/'+Math.round(bPow)+')';
+
+    const nodeColor=lv===0?'#6aa9ff':lv===1?'#c77dff':'#ffd166';
+
+    // Work at this level
+    let workLabel;
+    if(k===0) workLabel=''+Math.round(totalNodes);
+    else if(k===1){
+      const ratio=totalNodes/bPow;
+      if(Math.abs(ratio-1)<0.01) workLabel='n';
+      else if(ratio<1) workLabel='n/'+Math.round(1/ratio);
+      else workLabel=Math.round(ratio)+'n';
+    } else {
+      if(lv===0) workLabel='n'+sup(k);
+      else workLabel=Math.round(totalNodes)+'\u00B7(n/'+Math.round(bPow)+')'+sup(k);
+    }
+    const isHL=(caseNum===1&&lv===levels-1)||(caseNum===3&&lv===0)||caseNum===2;
+    const wColor=isHL?caseColor:'#8890b5';
+    const wBold=((caseNum===1&&lv===levels-1)||(caseNum===3&&lv===0))?'700':'400';
+
+    // Level row
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">';
+    // Left: level label
+    h+=`<div style="flex:0 0 32px;text-align:center;font-size:8px;color:#8890b5;"><div style="font-weight:600;">L${lv}</div><div>${Math.round(totalNodes)}x</div></div>`;
+    // Center: nodes
+    h+='<div style="flex:1;display:flex;justify-content:center;gap:4px;flex-wrap:nowrap;align-items:center;">';
+    for(let i=0;i<show;i++){
+      h+=`<div style="padding:3px 6px;border-radius:6px;border:1px solid ${nodeColor};background:${nodeColor}18;font-size:9px;font-weight:600;color:${nodeColor};white-space:nowrap;">${sizeLabel}</div>`;
+    }
+    if(truncated) h+=`<div style="color:#8890b5;font-size:11px;">\u2026</div>`;
+    h+='</div>';
+    // Right: work
+    h+=`<div style="flex:0 0 40px;text-align:right;font-size:9.5px;font-weight:${wBold};color:${wColor};">${workLabel}</div>`;
+    h+='</div>';
+
+    // Connector lines (simple arrows)
+    if(lv<levels-1){
+      h+='<div style="display:flex;justify-content:center;margin:1px 0;">';
+      h+='<div style="display:flex;gap:'+Math.max(4,30/a)+'px;justify-content:center;">';
+      const arrowCount=Math.min(show*a,12);
+      for(let i=0;i<Math.min(show,4);i++){
+        const arrows=Math.min(a,4);
+        for(let c=0;c<arrows;c++){
+          h+=`<div style="width:1px;height:10px;background:rgba(255,255,255,0.12);"></div>`;
+        }
+        if(i<Math.min(show,4)-1) h+='<div style="width:6px;"></div>';
+      }
+      h+='</div></div>';
+    }
+  }
+
+  // Bottom: dots + info
+  h+='<div style="text-align:center;margin-top:4px;">';
+  h+='<div style="color:#8890b5;font-size:12px;">\u22EE</div>';
+  const lc=logba<0.01?'1':Math.abs(logba-1)<0.01?'n':Math.abs(logba-2)<0.01?'n\xB2':'n^'+logba.toFixed(1);
+  h+=`<div style="font-size:8.5px;color:#8890b5;">depth = log(n)/log(${b}) \u2022 ${lc} leaves</div>`;
+  const tl=caseNum===1?'\u2191 work grows per level':caseNum===2?'\u2192 work constant per level':'\u2193 work shrinks per level';
+  h+=`<div style="font-size:8.5px;font-weight:600;color:${caseColor};margin-top:2px;">${tl}</div>`;
+  h+='</div></div>';
+
+  el.innerHTML=h;
+}
+
 
 
 // ═══════════════════════════════════════════════════════════
